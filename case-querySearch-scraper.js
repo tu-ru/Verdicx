@@ -1,3 +1,26 @@
+/**
+ * @fileoverview Case query search scraper module for Kenyan law cases.
+ * This module handles the searching and scraping of legal case URLs from Kenya Law websites
+ * using the ScrapingDog API. It includes functionality for URL normalization and
+ * duplicate filtering.
+ *
+ * @module case-querySearch-scraper
+ * @requires dotenv
+ * @requires path
+ * @requires axios
+ * @requires ./dataAndResults/aggregate-keywords
+ *
+ * @example
+ * // Basic usage
+ * processKeywords().then(results => {
+ *   console.log(results);
+ * });
+ *
+ * @author [samm]
+ * @version 1.0.0
+ * @license [License MIT]
+ */
+
 import dotenv from "dotenv";
 import path from "path";
 import axios from "axios";
@@ -15,7 +38,7 @@ if (!SCRAPINGDOG_API_KEY) {
 /**
  * Helper function to normalize URLs (remove tracking parameters, etc.).
  * Ensures URLs with same base path are treated as duplicates.
- * 
+ *
  * @param {string} url - The URL to normalize.
  * @returns {string} - Normalized URL for comparison.
  */
@@ -32,7 +55,7 @@ const normalizeUrl = (url) => {
 /**
  * Fetch search results for a given keyword using ScrapingDog API.
  * Ensures duplicate URLs are filtered out dynamically.
- * 
+ *
  * @param {string} keyword - Search keyword.
  * @returns {Promise<{ keyword: string, caseurl: string[] }>} - Extracted URLs for the keyword.
  */
@@ -66,7 +89,7 @@ const fetchSearchResults = async (keyword) => {
     // Extract URLs from the response
     let urls = data.organic_results?.map((result) => result.link) || [];
 
-    
+
     const seenUrls = new Set();
     const filteredUrls = urls.filter((url) => {
       const normalized = normalizeUrl(url);
