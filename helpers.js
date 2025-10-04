@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
+import * as fsPromise from "fs/promises";
 
 const envPath = path.join(process.cwd(), ".env");
 dotenv.config({ path: envPath });
@@ -12,10 +13,6 @@ if (!GEMINI_API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-const embeddingModel = genAI.getGenerativeModel({
-  model: "text-embedding-004",
-});
 
 /**
  * Calculates cosine similarity between two vectors.
@@ -82,8 +79,15 @@ function weightedFrequencyMap(items, weightFunction = (item) => 1) {
  * @param {object} data - Data to vectorize against when calculating cosine
  * @returns {Promise<number>} - A Promise that resolves to the cosine similarity relevance score.
  */
-export async function calculateRelevanceScore(data, userQuery, isCase) {
+export async function calculateRelevanceScore(data, userQuery, isCase, mode) {
   try {
+
+  const embeddingModel = genAI.getGenerativeModel({
+  model: "gemini-embedding-exp-03-07",
+  generationConfig:{
+    taskType: mode
+  }
+});
     let value;
 
     if (isCase) {
@@ -148,7 +152,6 @@ export async function calculateRelevanceScore(data, userQuery, isCase) {
   }
 }
 
-
 /**
  * Calculate a confidence score based on consensus among cases
  * @param {number} aggregatedCount - Number of items that passed the threshold
@@ -174,7 +177,7 @@ export async function enhancedAggregateCases(
   userQuery,
   isCase,
   options = {},
-  relevanceStats
+  relevanceStats,
 ) {
   // Define thresholds for all fields with defaults
   const issueFrequencyThreshold = options.issueFrequencyThreshold || 1;
@@ -213,7 +216,7 @@ export async function enhancedAggregateCases(
   // Loop through each case with its relevance score
   caseArray.forEach((caseJson, index) => {
     const relevanceScore = relevanceStats?.relevanceScores[index];
-    console.log("Each Relevance - Scores: ", relevanceScore)
+    console.log("Each Relevance - Scores: ", relevanceScore);
 
     // Ensure parsedOutput is an object if it's a string
     const parsedCase =
@@ -377,7 +380,7 @@ export async function enhancedAggregateCases(
           type: "legal",
           value: parsedCase.analysisAndImplications.legalImplications,
           weight: relevanceScore,
-          caseTitle: parsedCase.caseInformation.caseTitle
+          caseTitle: parsedCase.caseInformation.caseTitle,
         });
       }
 
@@ -386,7 +389,7 @@ export async function enhancedAggregateCases(
           type: "practical",
           value: parsedCase.analysisAndImplications.practicalImplications,
           weight: relevanceScore,
-          casetitle: parsedCase.caseInformation.caseTitle
+          casetitle: parsedCase.caseInformation.caseTitle,
         });
       }
 
@@ -545,7 +548,7 @@ export async function enhancedAggregateCases(
     }
   });
 
-   // Timeline analysis
+  // Timeline analysis
   timelineData.sort((a, b) => a.date - b.date);
 
   // Group cases by year for trend analysis
@@ -589,16 +592,15 @@ export async function enhancedAggregateCases(
     .sort((a, b) => b.weight - a.weight)
     .map((item) => item.value);
 
-    const primaryIssues = legalIssuesData
-    .filter(item => item.isPrimary && item.weight >= issueFrequencyThreshold) // Apply threshold
+  const primaryIssues = legalIssuesData
+    .filter((item) => item.isPrimary && item.weight >= issueFrequencyThreshold) // Apply threshold
     .sort((a, b) => b.weight - a.weight)
-    .map(item => item.value);
-  
+    .map((item) => item.value);
+
   const secondaryIssues = legalIssuesData
-    .filter(item => !item.isPrimary && item.weight >= issueFrequencyThreshold) // Apply threshold
+    .filter((item) => !item.isPrimary && item.weight >= issueFrequencyThreshold) // Apply threshold
     .sort((a, b) => b.weight - a.weight)
-    .map(item => item.value);
-  
+    .map((item) => item.value);
 
   // Calculate confidence score based on the consensus among cases
   const totalCases = caseArray.length;
@@ -651,7 +653,7 @@ export async function enhancedAggregateCases(
       // Issue classification
       issueClassification: {
         primaryIssues,
-        secondaryIssues
+        secondaryIssues,
       },
       jurisdictionDistribution,
       // Timeline analysis
@@ -662,8 +664,8 @@ export async function enhancedAggregateCases(
             ? timelineData[timelineData.length - 1]
             : null,
         yearlyTrends,
-      },  
-     
+      },
+
       // Precedent analysis
 
       precedentAnalysis: {
@@ -714,76 +716,76 @@ The `enhancedAggregateCases` function returns an object containing aggregated da
 
 These fields provide aggregated data on key legal elements across the cases, filtered by frequency thresholds.
 
-- **`aggregatedLegalIssues`**  
-  - **Description**: A list of legal issues that appear frequently across the cases.  
-  - **Purpose**: Identifies the most common legal questions or disputes in the dataset.  
-  - **Utilization**:  
-    - **Case Analysis**: Highlights recurring legal issues to understand the core disputes in similar cases.  
-    - **Legal Building**: Guides focus on addressing these prevalent issues in arguments or pleadings.  
+- **`aggregatedLegalIssues`**
+  - **Description**: A list of legal issues that appear frequently across the cases.
+  - **Purpose**: Identifies the most common legal questions or disputes in the dataset.
+  - **Utilization**:
+    - **Case Analysis**: Highlights recurring legal issues to understand the core disputes in similar cases.
+    - **Legal Building**: Guides focus on addressing these prevalent issues in arguments or pleadings.
     - **Case Prediction**: Suggests which legal issues are likely to arise in future similar cases.
 
-- **`aggregatedStatutes`**  
-  - **Description**: A list of statutes frequently cited or relevant in the cases.  
-  - **Purpose**: Indicates which laws are most applicable or contested.  
-  - **Utilization**:  
-    - **Case Analysis**: Reveals the statutory framework governing the cases.  
-    - **Legal Building**: Informs the selection of statutes to cite or challenge in a case.  
+- **`aggregatedStatutes`**
+  - **Description**: A list of statutes frequently cited or relevant in the cases.
+  - **Purpose**: Indicates which laws are most applicable or contested.
+  - **Utilization**:
+    - **Case Analysis**: Reveals the statutory framework governing the cases.
+    - **Legal Building**: Informs the selection of statutes to cite or challenge in a case.
     - **Case Prediction**: Highlights statutes likely to influence future rulings.
 
-- **`aggregatedArguments`**  
-  - **Description**: Common arguments made by parties across the cases.  
-  - **Purpose**: Shows typical arguments presented in similar legal disputes.  
-  - **Utilization**:  
-    - **Case Analysis**: Provides insight into recurring argumentative strategies.  
-    - **Legal Building**: Helps craft arguments by drawing on frequently used approaches.  
+- **`aggregatedArguments`**
+  - **Description**: Common arguments made by parties across the cases.
+  - **Purpose**: Shows typical arguments presented in similar legal disputes.
+  - **Utilization**:
+    - **Case Analysis**: Provides insight into recurring argumentative strategies.
+    - **Legal Building**: Helps craft arguments by drawing on frequently used approaches.
     - **Case Prediction**: Indicates arguments likely to be raised in future cases.
 
-- **`aggregatedEvidence`**  
-  - **Description**: Types of evidence frequently presented in the cases.  
-  - **Purpose**: Identifies critical evidence commonly relied upon.  
-  - **Utilization**:  
-    - **Case Analysis**: Shows what evidence drives decisions in these cases.  
-    - **Legal Building**: Guides the collection and presentation of impactful evidence.  
+- **`aggregatedEvidence`**
+  - **Description**: Types of evidence frequently presented in the cases.
+  - **Purpose**: Identifies critical evidence commonly relied upon.
+  - **Utilization**:
+    - **Case Analysis**: Shows what evidence drives decisions in these cases.
+    - **Legal Building**: Guides the collection and presentation of impactful evidence.
     - **Case Prediction**: Suggests which evidence might sway future outcomes.
 
-- **`aggregatedCourtReasonings`**  
-  - **Description**: Common reasoning or logic used by courts in their decisions.  
-  - **Purpose**: Captures judicial thought processes in similar cases.  
-  - **Utilization**:  
-    - **Case Analysis**: Offers insight into how courts interpret and decide cases.  
-    - **Legal Building**: Aligns arguments with reasoning patterns courts favor.  
+- **`aggregatedCourtReasonings`**
+  - **Description**: Common reasoning or logic used by courts in their decisions.
+  - **Purpose**: Captures judicial thought processes in similar cases.
+  - **Utilization**:
+    - **Case Analysis**: Offers insight into how courts interpret and decide cases.
+    - **Legal Building**: Aligns arguments with reasoning patterns courts favor.
     - **Case Prediction**: Helps forecast judicial reasoning in future cases.
 
-- **`aggregatedFinalOrders`**  
-  - **Description**: Frequently issued final decisions or orders.  
-  - **Purpose**: Reflects typical case resolutions.  
-  - **Utilization**:  
-    - **Case Analysis**: Shows the range of outcomes in similar cases.  
-    - **Legal Building**: Sets expectations for potential rulings.  
+- **`aggregatedFinalOrders`**
+  - **Description**: Frequently issued final decisions or orders.
+  - **Purpose**: Reflects typical case resolutions.
+  - **Utilization**:
+    - **Case Analysis**: Shows the range of outcomes in similar cases.
+    - **Legal Building**: Sets expectations for potential rulings.
     - **Case Prediction**: Indicates likely final orders based on historical data.
 
-- **`mostLikelyDisposition`**  
-  - **Description**: The most common case disposition (e.g., "affirmed," "reversed") based on weighted frequency.  
-  - **Purpose**: Predicts the predominant outcome based on past cases.  
-  - **Utilization**:  
-    - **Case Analysis**: Identifies the prevailing resolution trend.  
-    - **Legal Building**: Helps set realistic outcome expectations.  
+- **`mostLikelyDisposition`**
+  - **Description**: The most common case disposition (e.g., "affirmed," "reversed") based on weighted frequency.
+  - **Purpose**: Predicts the predominant outcome based on past cases.
+  - **Utilization**:
+    - **Case Analysis**: Identifies the prevailing resolution trend.
+    - **Legal Building**: Helps set realistic outcome expectations.
     - **Case Prediction**: Offers a direct prediction of the likely disposition.
 
-- **`extractedPrecedents`**  
-  - **Description**: Key precedents frequently cited in the cases.  
-  - **Purpose**: Highlights influential case law shaping legal outcomes.  
-  - **Utilization**:  
-    - **Case Analysis**: Reveals foundational cases affecting the dataset.  
-    - **Legal Building**: Provides authoritative precedents to strengthen arguments.  
+- **`extractedPrecedents`**
+  - **Description**: Key precedents frequently cited in the cases.
+  - **Purpose**: Highlights influential case law shaping legal outcomes.
+  - **Utilization**:
+    - **Case Analysis**: Reveals foundational cases affecting the dataset.
+    - **Legal Building**: Provides authoritative precedents to strengthen arguments.
     - **Case Prediction**: Suggests precedents likely to be cited in future rulings.
 
-- **`confidenceScores`**  
-  - **Description**: Scores indicating the consistency of findings for legal issues, statutes, disposition, precedents, and overall aggregation.  
-  - **Purpose**: Measures the reliability of the aggregated data.  
-  - **Utilization**:  
-    - **Case Analysis**: Indicates how uniform the data is across cases.  
-    - **Legal Building**: Guides reliance on certain elements based on their consistency.  
+- **`confidenceScores`**
+  - **Description**: Scores indicating the consistency of findings for legal issues, statutes, disposition, precedents, and overall aggregation.
+  - **Purpose**: Measures the reliability of the aggregated data.
+  - **Utilization**:
+    - **Case Analysis**: Indicates how uniform the data is across cases.
+    - **Legal Building**: Guides reliance on certain elements based on their consistency.
     - **Case Prediction**: Higher scores suggest more reliable outcome predictions.
 
 ---
@@ -792,61 +794,61 @@ These fields provide aggregated data on key legal elements across the cases, fil
 
 These fields offer deeper insights and classifications for nuanced analysis.
 
-- **`issueClassification`**  
-  - **Description**: Categorizes legal issues into primary and secondary types.  
-    - `primaryIssues`: Main points of contention.  
-    - `secondaryIssues`: Related but less central issues.  
-  - **Purpose**: Prioritizes the most critical legal issues.  
-  - **Utilization**:  
-    - **Case Analysis**: Focuses attention on the primary disputes driving cases.  
-    - **Legal Building**: Directs efforts toward addressing key issues effectively.  
+- **`issueClassification`**
+  - **Description**: Categorizes legal issues into primary and secondary types.
+    - `primaryIssues`: Main points of contention.
+    - `secondaryIssues`: Related but less central issues.
+  - **Purpose**: Prioritizes the most critical legal issues.
+  - **Utilization**:
+    - **Case Analysis**: Focuses attention on the primary disputes driving cases.
+    - **Legal Building**: Directs efforts toward addressing key issues effectively.
     - **Case Prediction**: Highlights issues likely to determine future outcomes.
 
-- **`jurisdictionDistribution`**  
-  - **Description**: Distribution of cases across different jurisdictions.  
-  - **Purpose**: Shows jurisdictional variations in case handling.  
-  - **Utilization**:  
-    - **Case Analysis**: Reveals if certain jurisdictions treat cases differently.  
-    - **Legal Building**: Informs venue selection or jurisdictional strategies.  
+- **`jurisdictionDistribution`**
+  - **Description**: Distribution of cases across different jurisdictions.
+  - **Purpose**: Shows jurisdictional variations in case handling.
+  - **Utilization**:
+    - **Case Analysis**: Reveals if certain jurisdictions treat cases differently.
+    - **Legal Building**: Informs venue selection or jurisdictional strategies.
     - **Case Prediction**: Suggests jurisdiction-specific outcome trends.
 
-- **`timelineAnalysis`**  
-  - **Description**: Details the temporal scope and trends of the cases.  
-    - `earliestCase`: Oldest case in the dataset.  
-    - `latestCase`: Most recent case.  
-    - `yearlyTrends`: Case counts and relevance by year.  
-  - **Purpose**: Tracks the evolution of the legal landscape over time.  
-  - **Utilization**:  
-    - **Case Analysis**: Provides historical context for case patterns.  
-    - **Legal Building**: Offers temporal insights for framing arguments.  
+- **`timelineAnalysis`**
+  - **Description**: Details the temporal scope and trends of the cases.
+    - `earliestCase`: Oldest case in the dataset.
+    - `latestCase`: Most recent case.
+    - `yearlyTrends`: Case counts and relevance by year.
+  - **Purpose**: Tracks the evolution of the legal landscape over time.
+  - **Utilization**:
+    - **Case Analysis**: Provides historical context for case patterns.
+    - **Legal Building**: Offers temporal insights for framing arguments.
     - **Case Prediction**: Identifies trends that may influence future rulings.
 
-- **`precedentAnalysis`**  
-  - **Description**: Lists top precedents and their citation frequency.  
-  - **Purpose**: Identifies the most influential case law.  
-  - **Utilization**:  
-    - **Case Analysis**: Highlights precedents shaping legal interpretations.  
-    - **Legal Building**: Guides the use of impactful precedents in arguments.  
+- **`precedentAnalysis`**
+  - **Description**: Lists top precedents and their citation frequency.
+  - **Purpose**: Identifies the most influential case law.
+  - **Utilization**:
+    - **Case Analysis**: Highlights precedents shaping legal interpretations.
+    - **Legal Building**: Guides the use of impactful precedents in arguments.
     - **Case Prediction**: Suggests precedents likely to affect future decisions.
 
-- **`implicationsAnalysis`**  
-  - **Description**: Analyzes broader impacts and alternative perspectives.  
-    - `legalImplications`: Wider legal effects of the cases.  
-    - `practicalImplications`: Real-world consequences.  
-    - `areasForFurtherInquiry`: Unresolved issues or questions.  
-    - `dissentingOpinions`: Alternative judicial views.  
-  - **Purpose**: Assesses the full scope of case outcomes.  
-  - **Utilization**:  
-    - **Case Analysis**: Provides a comprehensive view of case significance.  
-    - **Legal Building**: Incorporates implications and dissenting views into strategy.  
+- **`implicationsAnalysis`**
+  - **Description**: Analyzes broader impacts and alternative perspectives.
+    - `legalImplications`: Wider legal effects of the cases.
+    - `practicalImplications`: Real-world consequences.
+    - `areasForFurtherInquiry`: Unresolved issues or questions.
+    - `dissentingOpinions`: Alternative judicial views.
+  - **Purpose**: Assesses the full scope of case outcomes.
+  - **Utilization**:
+    - **Case Analysis**: Provides a comprehensive view of case significance.
+    - **Legal Building**: Incorporates implications and dissenting views into strategy.
     - **Case Prediction**: Anticipates future developments or challenges.
 
-- **`counterArguments`**  
-  - **Description**: Analysis of arguments opposing the majority view.  
-  - **Purpose**: Identifies potential challenges to prevailing arguments.  
-  - **Utilization**:  
-    - **Case Analysis**: Exposes weaknesses in common positions.  
-    - **Legal Building**: Prepares rebuttals for opposing counsel’s arguments.  
+- **`counterArguments`**
+  - **Description**: Analysis of arguments opposing the majority view.
+  - **Purpose**: Identifies potential challenges to prevailing arguments.
+  - **Utilization**:
+    - **Case Analysis**: Exposes weaknesses in common positions.
+    - **Legal Building**: Prepares rebuttals for opposing counsel’s arguments.
     - **Case Prediction**: Helps anticipate obstacles to predicted outcomes.
 
 ---
@@ -855,25 +857,25 @@ These fields offer deeper insights and classifications for nuanced analysis.
 
 These fields quantify the diversity of elements in the dataset.
 
-- **`counts`**  
-  - **Description**: Numerical data on unique items, including legal issues, statutes, arguments, evidence types, court reasonings, final orders, dispositions, total cases, jurisdictions, and precedents.  
-  - **Purpose**: Measures the variety and complexity of the dataset.  
-  - **Utilization**:  
-    - **Case Analysis**: Indicates the breadth of elements involved.  
-    - **Legal Building**: Helps assess the scope of issues or arguments to address.  
+- **`counts`**
+  - **Description**: Numerical data on unique items, including legal issues, statutes, arguments, evidence types, court reasonings, final orders, dispositions, total cases, jurisdictions, and precedents.
+  - **Purpose**: Measures the variety and complexity of the dataset.
+  - **Utilization**:
+    - **Case Analysis**: Indicates the breadth of elements involved.
+    - **Legal Building**: Helps assess the scope of issues or arguments to address.
     - **Case Prediction**: More unique elements may suggest less predictability; fewer suggest greater consistency.
 
 ---
 
 ### Utilization Summary
 
-- **Case Analysis**:  
+- **Case Analysis**:
   The original fields (e.g., `aggregatedLegalIssues`, `aggregatedCourtReasonings`) provide a broad overview of common elements in similar cases, while enhanced fields (e.g., `issueClassification`, `timelineAnalysis`) offer deeper insights into priorities, trends, and impacts. Together, they enable a thorough understanding of case patterns and context.
 
-- **Legal Building**:  
+- **Legal Building**:
   Fields like `aggregatedArguments`, `extractedPrecedents`, and `precedentAnalysis` inform the construction of robust legal strategies by highlighting successful approaches and authoritative case law. `counterArguments` and `implicationsAnalysis` strengthen preparation by addressing opposing views and broader consequences.
 
-- **Case Prediction**:  
+- **Case Prediction**:
   `mostLikelyDisposition` and `confidenceScores` provide direct outcome predictions and their reliability, while `timelineAnalysis` and `jurisdictionDistribution` refine forecasts by revealing trends and jurisdictional influences. `issueClassification` ensures focus on decisive factors.
 
 ---
@@ -947,49 +949,37 @@ function analyzeCounterArguments(argumentsData, dispositionData) {
 }
 
 export async function enhancedAggregateKeywords(
-  keywordsArr,
+  keywordsData,
   userQuery,
   isCase,
   options = {},
 ) {
   const keywordFrequencyThreshold = options.keywordFrequencyThreshold || 1;
 
-  // Ensure keywordsArr is an array; if it's a single object, wrap it
-  if (!Array.isArray(keywordsArr)) {
-    keywordsArr = [keywordsArr]; // Convert single object into an array
-  }
+  const allKeywords = Array.isArray(keywordsData.keywords)
+    ? keywordsData.keywords
+    : [];
 
-  // Extract all possible keywords from the objects
-  let allKeywords = [];
-  keywordsArr.forEach((keywordJson) => {
-    if (keywordJson.possibleKeywords) {
-      allKeywords = allKeywords.concat(keywordJson.possibleKeywords);
-    }
-  });
-
-  // Extract the additional values
-  const yearAfter = keywordsArr[0]?.yearAfter ?? 0;
-  const yearBefore = keywordsArr[0]?.yearBefore ?? 0;
-  const specifiedYear = keywordsArr[0]?.specifiedYear ?? 0;
+  const { yearAfter = 0, yearBefore = 0, specifiedYear = 0 } = keywordsData;
 
   // Calculate relevance scores for each keyword individually
   const relevanceScores = await Promise.all(
     allKeywords.map((keyword) =>
-      calculateRelevanceScore(keyword, userQuery, isCase),
+      calculateRelevanceScore(keyword, userQuery, isCase, "SEMANTIC_SIMILARITY"),
     ),
   );
 
-  console.log(relevanceScores)
+  console.log(relevanceScores);
 
-  // Collect keywords with their relevance weights
-  const keywordsData = allKeywords.map((keyword, index) => ({
+  // Process keywords with weights (renamed to avoid conflict)
+  const weightedKeywords = allKeywords.map((keyword, index) => ({
     value: keyword,
     weight: relevanceScores[index],
   }));
 
-  // Create a weighted frequency map for the keywords
+  // Create frequency map
   const keywordsFrequency = weightedFrequencyMap(
-    keywordsData,
+    weightedKeywords,
     (item) => item.weight || 1,
   );
 
@@ -1021,3 +1011,14 @@ export const writeToFile = (data, dataPath) => {
     throw error;
   }
 };
+
+export async function readJsonFile(filePath) {
+  try {
+    const absolutePath = path.resolve(filePath);
+    const jsonData = await fsPromise.readFile(absolutePath, "utf8");
+    return JSON.parse(jsonData);
+  } catch (error) {
+    console.error("Error reading JSON file:", error);
+    throw error;
+  }
+}

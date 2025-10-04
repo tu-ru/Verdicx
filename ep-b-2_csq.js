@@ -24,12 +24,30 @@
 import dotenv from "dotenv";
 import path from "path";
 import axios from "axios";
-import { aggregateKeywords } from "./dataAndResults/aggregate-keywords.js";
+import { getAggKeywords } from './json_outputs/json_parser.js';
+import { writeToFile } from "./helpers.js";
+
 
 const envPath = path.join(process.cwd(), ".env");
 dotenv.config({ path: envPath });
 
-const { aggregatedKeywords, yearAfter, yearBefore, specifiedYear } = aggregateKeywords;
+let state = {
+    aggKeywords: [],
+    yearAfter: null,
+    yearBefore: null,
+    specifiedYear: null,
+    initialized: false
+};
+
+const init = async () => {
+    if (state.initialized) return;
+
+    const jsonData = await getAggKeywords();
+    state = {
+        ...jsonData,
+        initialized: true
+    };
+};
 const SCRAPINGDOG_API_KEY = process.env.SCRAPINGDOG_API_KEY;
 if (!SCRAPINGDOG_API_KEY) {
   throw new Error("ScrapingDog API key is not defined in your .env file");
@@ -56,28 +74,31 @@ const normalizeUrl = (url) => {
  * Fetch search results for a given keyword using ScrapingDog API.
  * Ensures duplicate URLs are filtered out dynamically.
  *
- * @param {string} keyword - Search keyword.
+ * @param {string} keyword - Search keyword (query).
  * @returns {Promise<{ keyword: string, caseurl: string[] }>} - Extracted URLs for the keyword.
  */
 const fetchSearchResults = async (keyword) => {
   try {
-    let timeFilter = "";
-    if (specifiedYear) {
-      timeFilter = `("${keyword}" ${specifiedYear})`;
-    } else if (yearAfter && yearBefore) {
-      timeFilter = `("${keyword}") after:${yearAfter} before:${yearBefore}`;
+    let keywordAndconstrain = "";
+    if (state.specifiedYear) {
+      keywordAndconstrain = `${keyword} ${state.specifiedYear}`;
+    } else if (state.yearAfter && state.yearBefore) {
+      keywordAndconstrain = `${keyword} after:${state.yearAfter} before:${state.yearBefore}`;
     }
 
     // Construct search query
-    const query = `site:new.kenyalaw.org/caselaw/cases OR site:kenyalaw.org/caselaw/cases ${timeFilter} -filetype:pdf -filetype:docx`;
+    const query = `site:new.kenyalaw.org/akn/ke/judgment/ ${keywordAndconstrain} -filetype:pdf -filetype:docx`;
+
+    console.log("Checking request sent to scraper dog", query)
 
     // ScrapingDog API parameters
     const params = {
       api_key: SCRAPINGDOG_API_KEY,
       query: query,
-      results: 5,
+      results: 10,
       country: "ke",
       cr: "countryKE",
+      advance_search: 'false',
       domain: "google.co.ke",
       page: 0,
       advance_search: "false",
@@ -109,9 +130,10 @@ const fetchSearchResults = async (keyword) => {
  * Process all aggregated keywords to fetch & filter case URLs.
  */
 const processKeywords = async () => {
+  await init()
   try {
     const results = await Promise.all(
-      aggregatedKeywords.map(fetchSearchResults)
+      state.aggKeywords.map(fetchSearchResults)
     );
     console.log("Filtered Results for Keywords:", results);
     return results;
@@ -120,4 +142,8 @@ const processKeywords = async () => {
   }
 };
 
-processKeywords();
+processKeywords().then((results => {
+  writeToFile(results, "./json_outputs/csq_output.json")
+})).catch(error => {
+    console.error("Fetching URLs failed:", error);
+});

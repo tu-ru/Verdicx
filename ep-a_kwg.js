@@ -15,7 +15,8 @@ import { GoogleGenerativeAI} from "@google/generative-ai";
 import path from "path";
 import dotenv from "dotenv";
 import { writeToFile } from "./helpers.js";
-import { keyWordSchema, keyWordPrompt } from "./schema/keywordGenSchema.js";
+import { keyWordSchema, keyWordPrompt } from "./schema/kwg_gen_schema.js";
+import { userQueries } from "./extras/user_queries.js";
 
 // TODO Centralize env fetching mechanism
 
@@ -57,21 +58,12 @@ const model = genAI.getGenerativeModel({
 });
 
 /**
- * Variable userQuery holds the intended persona questions, and time constrains if specified
- */
-const userQuery = [
-  "Given evidence of fraudulent transfer of title deeds and unauthorized encroachment on a land parcel, what ruling should the court be expected to deliver?",
-  "I was sexually assulted, but i have no evidence, how will the judge handle this case?",
-  "How did courts handle workplace discrimination cases in 2022?",
-];
-
-/**
  * CoT for keyword extraction and time constrain logic
  * @requires keyWordPrompt
  * @requires userQuery
  * @output keywordSchema
  */
-const prompt = `${keyWordPrompt(userQuery)}`;
+const prompt = `${keyWordPrompt(userQueries)}`;
 async function keywordGenerator(prompt) {
   try {
     const result = await model.generateContent(prompt);

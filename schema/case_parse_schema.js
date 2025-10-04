@@ -205,7 +205,7 @@ export const schemaOld = {
   ],
 };
 
-const schema2BluePrint = {
+export const schema2BluePrint = {
   type: "object",
   properties: {
     caseDetails: {
@@ -570,7 +570,7 @@ const schema2BluePrint = {
   required: ["caseDetails", "partiesInvolved", "legalIssues", "finalDecision"],
 };
 
-const schema3BluePrint = {
+export const schema3BluePrint = {
   type: SchemaType.OBJECT,
   properties: {
     caseDetails: {
